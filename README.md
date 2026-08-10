@@ -3,6 +3,21 @@
 Day 3 homework — a FastMCP server exposing weather tools, deployed as its own
 Databricks App and driven by an Agent Bricks agent.
 
+## Submission
+
+| | |
+|---|---|
+| **Repo** | https://github.com/hanumkl/weather-mcp |
+| **Databricks App** | `https://mcp-weather-7474644226225525.aws.databricksapps.com` |
+| **MCP endpoint** | `https://mcp-weather-7474644226225525.aws.databricksapps.com/mcp` |
+| **Agent** | Playground + Llama 4 Maverick, system prompt below |
+| **Demo** | 3 screenshots in [`screenshots/`](screenshots/) |
+| **Tools** | 7, against a required minimum of 3 |
+| **Tests** | 47 checks against the live API, all passing |
+
+The app URL is workspace-authenticated, so the screenshots are the shareable
+evidence of it working.
+
 ```
 weather-mcp/
   README.md                    this file
@@ -115,7 +130,12 @@ agent can act on that — ask the user to clarify, or report the service is down
 4. Edit `NWS_USER_AGENT` in `app.yaml` to a real contact address
 5. Deploy, and note the app URL
 
-The MCP endpoint is at `https://<app-url>/mcp`.
+**Name the app with an `mcp-` prefix.** Databricks' tool picker lists only apps
+whose names start with `mcp-`; an app called `weather` deploys and serves fine
+but is invisible to every agent in the workspace. This one is `mcp-weather`.
+
+Deployed to: `https://mcp-weather-7474644226225525.aws.databricksapps.com`
+The MCP endpoint is that URL plus `/mcp`.
 
 ### 2. Verify before wiring the agent
 
@@ -131,10 +151,32 @@ Should list seven tools with their schemas. Then call `health_check` — it
 distinguishes "the upstream API is down" from "that place doesn't exist", which
 otherwise look identical from a failed tool call.
 
-### 3. Register with Agent Bricks
+Opening `/mcp` in a browser is also a useful smoke test: a healthy server
+answers `{"error": {"message": "Not Acceptable: Client must accept
+text/event-stream"}}`, which is the server speaking MCP correctly to a client
+that cannot.
 
-**Agent Bricks → Create agent → Tools → Add external MCP server**, pointing at
-`https://<app-url>/mcp`. Paste the system prompt below.
+### 3. Wire it to an agent
+
+**AI/ML → Playground**, pick a model with the tool-calling wrench icon
+(`Llama 4 Maverick` was used here), then **Tools → Add tools → MCP Servers →
+Custom MCP Server → `mcp-weather`**. Paste the system prompt below into
+**Add system prompt**.
+
+Two things that cost time here, both worth knowing:
+
+- **The model must support tool calling.** `Meta Llama 3.1 8B Instruct` has no
+  wrench icon, silently ignores the tools, and answers from memory — inventing
+  both the numbers and a plausible-sounding source. The system prompt cannot
+  prevent this; only picking a tool-capable model can.
+- **Ask one question per chat.** Several turns in, Llama starts *printing*
+  `[predict_umbrella_needed(location=Helsinki, date=2026-08-11)]` as text
+  instead of emitting a real call. Resetting the chat fixes it.
+
+The same server also registers under **Agents → + MCP → Connect an existing MCP
+server** as a Unity Catalog MCP service. The connection is created successfully,
+but tool discovery through the AI Gateway returned an empty error on Free
+Edition; the Playground route above works and was used for the demo.
 
 ---
 
@@ -179,40 +221,43 @@ Brief and practical. Lead with the answer, then the numbers behind it.
 
 ## Demonstrating it works
 
-Three natural-language questions covering the three required capabilities:
+Screenshots of the deployed agent are in [`screenshots/`](screenshots/), all
+against the live `mcp-weather` app via Playground + Llama 4 Maverick.
 
-**1. Current conditions**
+**1. Current conditions** — [`01-current-conditions.png`](screenshots/01-current-conditions.png)
 > What's the weather like in Tampere right now?
 
-Expect: `get_current_weather` → temperature, conditions, humidity, wind, with
-the resolved location repeated back.
+`get_current_weather({"location": "Tampere"})` → resolves to *Tampere,
+Pirkanmaa, Finland*, 15.9 °C, 86 % humidity, 20.5 km/h wind, `"source":
+"Open-Meteo"`. The answer restates the tool's numbers exactly.
 
-**2. Forecast**
-> What's the forecast for Helsinki over the next five days?
-
-Expect: `get_forecast` → five days of highs, lows and precipitation chances.
-
-**3. Derived prediction**
+**2. Derived prediction + error handling** — [`02-umbrella-prediction.png`](screenshots/02-umbrella-prediction.png)
 > Do I need an umbrella in Helsinki tomorrow?
 
-Expect: `predict_umbrella_needed` → a yes/no *plus* the reasoning: *"100%
-chance of precipitation, 4.8 mm expected, max wind 29.9 km/h"*.
+`predict_umbrella_needed` was called with the wrong year (`2024-08-11`), and
+the server answered `{"error": "2024-08-11 is in the past; this service only
+forecasts forward"}` — a clean, readable error rather than a traceback. The
+agent then recovered on its own with `get_forecast({"location": "Helsinki",
+"days": 1})` and reported the real numbers. Unplanned, but it demonstrates the
+error contract better than a successful call would have.
 
-Worth also capturing:
+**3. Multi-city comparison** — [`03-compare-locations.png`](screenshots/03-compare-locations.png)
+> Compare the weather in Barcelona, Helsinki and Reykjavik
 
-> We want a weekend trip — compare Helsinki, Barcelona and Reykjavik.
+One `compare_locations` call returns all three ranked with scores and verdicts
+— Barcelona 100, Reykjavik 100, Helsinki 85 (*slight rain*) — plus `"best"`
+and an empty `"unresolved"`. The agent relays the ranking and the reason
+Helsinki scores lower.
 
-> Are there any severe weather alerts for Miami?
-
-That last one is a good demo of a guardrail: ask it about Helsinki instead and
-the agent should say alerts aren't *available* rather than that there are none.
+Note that the derived tools are doing the judgement, not the model: the scores,
+the thresholds and the "in the past" rejection all come from the server.
 
 ---
 
 ## Tests
 
 ```bash
-pip install requests "mcp>=1.2.0,<2.0.0"
+pip install requests "fastmcp>=3.2.0"
 python test_weather_tools.py
 ```
 
