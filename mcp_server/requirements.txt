@@ -1,0 +1,4 @@
+# FastMCP lives inside `mcp` in 1.x, which is the Day 3 layout. mcp 2.0 split
+# it into a standalone `fastmcp` package.
+mcp>=1.2.0,<2.0.0
+requests>=2.32.3
