@@ -195,13 +195,19 @@ def _day_for(location: str, target: str | None) -> tuple[dict, dict]:
     except ValueError:
         raise WeatherError(f"date must be YYYY-MM-DD, got {target!r}")
 
+    # Errors name today's date. A caller that guessed the year wrong has no way
+    # to correct itself otherwise, and an agent told only "that's in the past"
+    # tends to reach for a different tool rather than retry this one.
+    today = date.today().isoformat()
     horizon = (wanted - date.today()).days
     if horizon < 0:
         raise WeatherError(f"{want} is in the past; this service only forecasts "
-                           f"forward")
+                           f"forward. Today is {today} - retry with a date "
+                           f"between {today} and 15 days after it")
     if horizon > 15:
         raise WeatherError(f"{want} is {horizon} days out; forecasts only go 16 "
-                           f"days ahead")
+                           f"days ahead. Today is {today} - retry with a date "
+                           f"no later than 15 days after it")
 
     # Two days of slack, not one. Forecasts come back in the *location's*
     # timezone, so a city west of the caller can still be on yesterday's date -

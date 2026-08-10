@@ -203,6 +203,10 @@ GUARDRAILS:
 - If a tool returns {"error": ...}, tell the user what failed and what would
   fix it — usually adding a country or region to the place name. Do not retry
   silently and do not guess the weather.
+- If the error is about the date, retry THE SAME tool with a corrected date.
+  The error states today's date; use it. Never substitute a different tool —
+  answering an umbrella question with get_forecast loses the threshold logic
+  that predict_umbrella_needed exists to apply.
 - Only answer for locations the tools can resolve. If geocoding fails twice,
   ask the user to be more specific rather than trying a third variation.
 - Forecasts only reach 16 days ahead. Beyond that, say so.
