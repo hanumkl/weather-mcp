@@ -150,10 +150,21 @@ expected = {"get_current_weather", "get_forecast", "predict_umbrella_needed",
             "get_severe_alerts", "health_check"}
 check("all tools registered", names == expected, names ^ expected)
 check("meets the 3-tool minimum", len(names) >= 3, len(names))
+# fastmcp 3.x sets `description` to the docstring's summary line only, so assert
+# against the source docstring (Args/Returns and all) rather than the summary.
+def _doc(name):
+    return getattr(getattr(server, name), "__doc__", "") or ""
+
+
+# ...and it exposes the input schema as `parameters`, where 1.x used `inputSchema`.
+def _schema(t):
+    return getattr(t, "inputSchema", None) or getattr(t, "parameters", None)
+
+
 check("every tool documented",
-      all(t.description and len(t.description) > 60 for t in tools),
-      [t.name for t in tools if not t.description or len(t.description) <= 60])
-check("tools expose input schemas", all(t.inputSchema is not None for t in tools))
+      all(len(_doc(t.name)) > 60 for t in tools),
+      [t.name for t in tools if len(_doc(t.name)) <= 60])
+check("tools expose input schemas", all(_schema(t) is not None for t in tools))
 
 print("\n=== errors are clean, never tracebacks ===")
 bad = server.get_current_weather("Zzzznotaplace")

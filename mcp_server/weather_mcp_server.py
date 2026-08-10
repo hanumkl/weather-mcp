@@ -25,13 +25,19 @@ from __future__ import annotations
 import logging
 import os
 
-# FastMCP ships inside `mcp` 1.x (the Day 3 layout) and as a standalone
-# `fastmcp` package from mcp 2.0. requirements.txt pins 1.x; accept either so a
-# differently-resolved image still starts.
+# Prefer the standalone `fastmcp` package (3.x), which is what Day 3's reference
+# server uses. Its "http" transport answers the SSE `GET /mcp` that Databricks'
+# AI Gateway issues during tool discovery; `mcp` 1.x's "streamable-http" rejects
+# that GET with 406 Not Acceptable, so Gateway registration fails against it.
+# The 1.x import is kept as a fallback so a differently-resolved image starts.
 try:
-    from mcp.server.fastmcp import FastMCP
-except ImportError:  # pragma: no cover
     from fastmcp import FastMCP
+
+    _STANDALONE_FASTMCP = True
+except ImportError:  # pragma: no cover
+    from mcp.server.fastmcp import FastMCP
+
+    _STANDALONE_FASTMCP = False
 
 import weather_broker as broker
 
@@ -199,7 +205,11 @@ if __name__ == "__main__":
     port = int(
         os.environ.get("DATABRICKS_APP_PORT") or os.environ.get("PORT") or "8000"
     )
-    logger.info("weather MCP server on :%s (streamable-http)", port)
-    mcp.settings.host = "0.0.0.0"
-    mcp.settings.port = port
-    mcp.run(transport="streamable-http")
+    if _STANDALONE_FASTMCP:
+        logger.info("weather MCP server on :%s (http)", port)
+        mcp.run(transport="http", host="0.0.0.0", port=port)
+    else:  # pragma: no cover
+        logger.info("weather MCP server on :%s (streamable-http)", port)
+        mcp.settings.host = "0.0.0.0"
+        mcp.settings.port = port
+        mcp.run(transport="streamable-http")
