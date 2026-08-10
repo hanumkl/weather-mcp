@@ -6,7 +6,7 @@ env:
   # Open-Meteo needs no key. Only the NWS alerts endpoint asks for a contact
   # address in the User-Agent - put a real one here.
   - name: NWS_USER_AGENT
-    value: "weather-mcp-bootcamp (your-email@example.com)"
+    value: "weather-mcp-bootcamp (hanumkl@gmail.com)"
   # Thresholds for predict_umbrella_needed, tunable without a code change.
   - name: UMBRELLA_CHANCE_PCT
     value: "40"
