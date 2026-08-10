@@ -195,7 +195,10 @@ def health_check() -> dict:
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "8000"))
+    # Databricks Apps injects DATABRICKS_APP_PORT; PORT is the local fallback.
+    port = int(
+        os.environ.get("DATABRICKS_APP_PORT") or os.environ.get("PORT") or "8000"
+    )
     logger.info("weather MCP server on :%s (streamable-http)", port)
     mcp.settings.host = "0.0.0.0"
     mcp.settings.port = port
